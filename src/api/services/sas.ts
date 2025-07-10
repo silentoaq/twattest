@@ -209,19 +209,38 @@ function getSchemaInfo(issuerDid: string): { name: string; version: number } | n
 }
 
 function serializeAttestationData(data: AttestationData): Uint8Array {
+    // merkle_root: Vec<u8> 格式 - 長度前綴 + 數據
     const merkleRootBytes = Buffer.from(data.merkleRoot, 'hex');
-    const credentialRefBytes = Buffer.from(data.credentialReference, 'utf8');
-    const lengthBytes = Buffer.allocUnsafe(4);
-    lengthBytes.writeUInt32LE(credentialRefBytes.length, 0);
+    const merkleRootLength = Buffer.allocUnsafe(4);
+    merkleRootLength.writeUInt32LE(merkleRootBytes.length, 0);
 
-    return new Uint8Array(Buffer.concat([merkleRootBytes, lengthBytes, credentialRefBytes]));
+    // credential_reference: String 格式 - 長度前綴 + UTF-8 數據  
+    const credentialRefBytes = Buffer.from(data.credentialReference, 'utf8');
+    const credentialRefLength = Buffer.allocUnsafe(4);
+    credentialRefLength.writeUInt32LE(credentialRefBytes.length, 0);
+
+    return new Uint8Array(Buffer.concat([
+        merkleRootLength, merkleRootBytes,
+        credentialRefLength, credentialRefBytes
+    ]));
 }
 
 function deserializeAttestationData(data: Uint8Array | ReadonlyUint8Array): AttestationData {
     const buffer = Buffer.from(data as Uint8Array);
-    const merkleRoot = buffer.slice(0, 32).toString('hex');
-    const credentialRefLength = buffer.readUInt32LE(32);
-    const credentialReference = buffer.slice(36, 36 + credentialRefLength).toString('utf8');
+    let offset = 0;
+
+    // 讀取 merkle_root (Vec<u8> 格式)
+    const merkleRootLength = buffer.readUInt32LE(offset);
+    offset += 4;
+    const merkleRootBytes = buffer.slice(offset, offset + merkleRootLength);
+    const merkleRoot = merkleRootBytes.toString('hex');
+    offset += merkleRootLength;
+
+    // 讀取 credential_reference (String 格式)
+    const credentialRefLength = buffer.readUInt32LE(offset);
+    offset += 4;
+    const credentialRefBytes = buffer.slice(offset, offset + credentialRefLength);
+    const credentialReference = credentialRefBytes.toString('utf8');
 
     return {
         merkleRoot,
