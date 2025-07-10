@@ -45,15 +45,19 @@ let payerKeypair: any = null;
 
 async function getKeypairs() {
     if (!authorityKeypair) {
+        const keyBytes = bs58.decode(process.env.AUTHORITY_KEYPAIR!);
         authorityKeypair = await createKeyPairSignerFromPrivateKeyBytes(
-            bs58.decode(process.env.AUTHORITY_KEYPAIR!)
+            keyBytes.slice(0, 32)
         );
     }
+
     if (!payerKeypair) {
+        const keyBytes = bs58.decode(process.env.PAYER_KEYPAIR!);
         payerKeypair = await createKeyPairSignerFromPrivateKeyBytes(
-            bs58.decode(process.env.PAYER_KEYPAIR!)
+            keyBytes.slice(0, 32)
         );
     }
+
     return { authorityKeypair, payerKeypair };
 }
 
