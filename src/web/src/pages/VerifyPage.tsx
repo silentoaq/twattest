@@ -1,29 +1,113 @@
+// src/web/src/pages/VerifyPage.tsx
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { apiService } from '@/lib/api';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, Shield, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Loader2, Shield, Wallet, CheckCircle2, AlertCircle } from 'lucide-react';
+
+interface PhantomWindow extends Window {
+  phantom?: {
+    solana?: {
+      isPhantom: boolean;
+      connect: () => Promise<{ publicKey: { toString: () => string } }>;
+      disconnect: () => Promise<void>;
+      signMessage: (message: Uint8Array) => Promise<{ signature: Uint8Array }>;
+    };
+  };
+}
+
+interface WalletState {
+  connected: boolean;
+  publicKey: string | null;
+  did: string | null;
+  connecting: boolean;
+}
 
 export const VerifyPage: React.FC = () => {
-  const [holderDid, setHolderDid] = useState('');
+  const [wallet, setWallet] = useState<WalletState>({
+    connected: false,
+    publicKey: null,
+    did: null,
+    connecting: false
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
-  const validateDid = (did: string): boolean => {
-    return did.startsWith('did:pkh:sol:') && did.length > 15;
+  const getPhantomProvider = () => {
+    const win = window as unknown as PhantomWindow;
+    if ('phantom' in win) {
+      const provider = win.phantom?.solana;
+      if (provider?.isPhantom) {
+        return provider;
+      }
+    }
+    return null;
+  };
+
+  const connectWallet = async () => {
+    try {
+      setWallet(prev => ({ ...prev, connecting: true }));
+      setError('');
+
+      const provider = getPhantomProvider();
+      if (!provider) {
+        window.open('https://phantom.app/', '_blank');
+        throw new Error('請先安裝 Phantom 錢包');
+      }
+
+      const { publicKey } = await provider.connect();
+      const key = publicKey.toString();
+      const did = `did:pkh:sol:${key}`;
+
+      // 驗證擁有權
+      const message = new TextEncoder().encode(
+        `驗證 Twattest 身份 - ${new Date().toISOString()}`
+      );
+      await provider.signMessage(message);
+
+      setWallet({
+        connected: true,
+        publicKey: key,
+        did,
+        connecting: false
+      });
+
+    } catch (error) {
+      console.error('錢包連接失敗:', error);
+      setError(error instanceof Error ? error.message : '錢包連接失敗');
+      setWallet(prev => ({
+        ...prev,
+        connected: false,
+        publicKey: null,
+        did: null,
+        connecting: false
+      }));
+    }
+  };
+
+  const disconnectWallet = async () => {
+    try {
+      const provider = getPhantomProvider();
+      if (provider) {
+        await provider.disconnect();
+      }
+    } catch (error) {
+      console.error('斷開連接失敗:', error);
+    }
+
+    setWallet({
+      connected: false,
+      publicKey: null,
+      did: null,
+      connecting: false
+    });
   };
 
   const handleStartVerification = async () => {
-    if (!holderDid.trim()) {
-      setError('請輸入 Holder DID');
-      return;
-    }
-
-    if (!validateDid(holderDid)) {
-      setError('DID 格式錯誤，應為 did:pkh:sol:{publickey}');
+    if (!wallet.connected || !wallet.did) {
+      setError('請先連接錢包');
       return;
     }
 
@@ -31,14 +115,13 @@ export const VerifyPage: React.FC = () => {
     setError('');
 
     try {
-      const result = await apiService.startVerification(holderDid);
+      const result = await apiService.startVerification(wallet.did);
       
       if (result.success && result.vpRequestUri) {
-        // 顯示 QR 碼和連結
         navigate('/result', { 
           state: { 
             vpRequestUri: result.vpRequestUri,
-            holderDid,
+            holderDid: wallet.did,
             requestId: result.requestId 
           } 
         });
@@ -53,19 +136,6 @@ export const VerifyPage: React.FC = () => {
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setHolderDid(value);
-    
-    // 清除錯誤當用戶開始輸入
-    if (error) {
-      setError('');
-    }
-  };
-
-  const isValid = validateDid(holderDid);
-  const isEmpty = !holderDid.trim();
-
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
@@ -78,45 +148,78 @@ export const VerifyPage: React.FC = () => {
             去中心化身份驗證服務
           </CardDescription>
         </CardHeader>
+        
         <CardContent className="space-y-6">
-          <div className="space-y-2">
-            <label htmlFor="holderDid" className="text-sm font-medium flex items-center space-x-2">
-              <span>Holder DID</span>
-              {!isEmpty && (
-                isValid ? (
-                  <CheckCircle2 className="h-4 w-4 text-green-500" />
+          {/* 錢包連接區域 */}
+          {!wallet.connected ? (
+            <div className="space-y-4">
+              <div className="text-center space-y-2">
+                <p className="text-sm text-muted-foreground">
+                  請連接您的 Phantom 錢包以開始驗證
+                </p>
+              </div>
+              
+              <Button 
+                onClick={connectWallet}
+                disabled={wallet.connecting}
+                className="w-full h-12 text-base font-medium"
+              >
+                {wallet.connecting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    連接中...
+                  </>
                 ) : (
-                  <AlertCircle className="h-4 w-4 text-red-500" />
-                )
-              )}
-            </label>
-            <Input
-              id="holderDid"
-              placeholder="did:pkh:sol:..."
-              value={holderDid}
-              onChange={handleInputChange}
-              className={`font-mono text-sm transition-colors ${
-                !isEmpty && !isValid 
-                  ? 'border-red-300 focus:border-red-500 focus:ring-red-500' 
-                  : !isEmpty && isValid
-                  ? 'border-green-300 focus:border-green-500 focus:ring-green-500'
-                  : ''
-              }`}
-              disabled={loading}
-            />
-            {!isEmpty && !isValid && (
-              <p className="text-xs text-red-600 flex items-center space-x-1">
-                <AlertCircle className="h-3 w-3" />
-                <span>請輸入有效的 DID 格式</span>
-              </p>
-            )}
-            {!isEmpty && isValid && (
-              <p className="text-xs text-green-600 flex items-center space-x-1">
-                <CheckCircle2 className="h-3 w-3" />
-                <span>DID 格式正確</span>
-              </p>
-            )}
-          </div>
+                  <>
+                    <Wallet className="mr-2 h-4 w-4" />
+                    連接 Phantom 錢包
+                  </>
+                )}
+              </Button>
+            </div>
+          ) : (
+            /* 已連接錢包的驗證區域 */
+            <div className="space-y-4">
+              <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800">
+                <div className="flex items-center space-x-2 mb-2">
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  <span className="text-sm font-medium text-green-800 dark:text-green-200">
+                    錢包已連接
+                  </span>
+                </div>
+                <div className="text-xs text-green-700 dark:text-green-300 space-y-1">
+                  <div>公鑰: {wallet.publicKey?.slice(0, 8)}...{wallet.publicKey?.slice(-8)}</div>
+                  <div className="font-mono">DID: {wallet.did}</div>
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={disconnectWallet}
+                  className="mt-2 text-xs"
+                >
+                  重新連接
+                </Button>
+              </div>
+
+              <Button 
+                onClick={handleStartVerification}
+                disabled={loading}
+                className="w-full h-12 text-base font-medium"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    啟動中...
+                  </>
+                ) : (
+                  <>
+                    <Shield className="mr-2 h-4 w-4" />
+                    開始身份驗證
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
           
           {error && (
             <div className="text-sm text-red-500 bg-red-50 dark:bg-red-900/20 p-3 rounded-lg border border-red-200 dark:border-red-800 flex items-start space-x-2">
@@ -125,41 +228,9 @@ export const VerifyPage: React.FC = () => {
             </div>
           )}
 
-          <Button 
-            onClick={handleStartVerification}
-            disabled={loading || isEmpty || !isValid}
-            className="w-full h-12 text-base font-medium transition-all duration-200"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                啟動中...
-              </>
-            ) : (
-              <>
-                <Shield className="mr-2 h-4 w-4" />
-                開始驗證
-              </>
-            )}
-          </Button>
-
           <div className="space-y-3 pt-2">
             <div className="text-xs text-muted-foreground text-center">
-              使用者需要透過支援 OID4VP 的錢包完成身份驗證
-            </div>
-            
-            <div className="bg-muted/50 p-3 rounded-lg space-y-2">
-              <h4 className="text-xs font-medium">支援的憑證類型：</h4>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="flex items-center space-x-1">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                  <span>自然人憑證</span>
-                </div>
-                <div className="flex items-center space-x-1">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span>房產憑證</span>
-                </div>
-              </div>
+              支援的憑證類型：自然人憑證、房產憑證
             </div>
           </div>
         </CardContent>
