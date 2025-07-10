@@ -35,6 +35,20 @@ router.get('/request/:requestId', async (req, res) => {
   }
 });
 
+// OID4VP 呈現端點：接收VP令牌
+router.post('/presentation/:requestId', async (req, res) => {
+  try {
+    const { requestId } = req.params;
+    const result = await handleCallback(requestId, req.body);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    });
+  }
+});
+
 // OID4VP 回調處理
 router.post('/callback/:requestId', async (req, res) => {
   try {

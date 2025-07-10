@@ -18,7 +18,7 @@ setInterval(() => {
       pendingVerifications.delete(requestId);
     }
   }
-}, 60 * 1000); // 每分鐘清理一次
+}, 60 * 1000);
 
 export async function startVerification(holderDid: string): Promise<VerificationResponse> {
   try {
@@ -96,7 +96,7 @@ export async function getVPRequest(requestId: string): Promise<any> {
     nonce: request.nonce,
     state: request.state,
     redirect_uri: `https://${process.env.DOMAIN}/api/verify/callback/${requestId}`,
-    response_uri: `https://${process.env.DOMAIN}/api/verify/callback/${requestId}`
+    response_uri: `https://${process.env.DOMAIN}/api/verify/presentation/${requestId}`
   };
 }
 
