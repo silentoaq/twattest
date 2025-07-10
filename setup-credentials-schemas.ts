@@ -16,7 +16,6 @@ import {
   createTransactionMessage,
   pipe,
   getSignatureFromTransaction,
-  type Address,
 } from "@solana/kit";
 import { createKeyPairSignerFromPrivateKeyBytes, signTransactionMessageWithSigners } from "@solana/signers";
 import bs58 from "bs58";
@@ -31,13 +30,15 @@ async function setupCredentialsAndSchemas() {
   const payer = await createKeyPairSignerFromPrivateKeyBytes(bs58.decode(process.env.PAYER_KEYPAIR!));
   const authority = await createKeyPairSignerFromPrivateKeyBytes(bs58.decode(process.env.AUTHORITY_KEYPAIR!));
 
-  console.log('Setting up Credential and Schemas...');
+  console.log('設定 Credential 和 Schemas...');
 
   // 1. 創建 Credential
   const [credentialPda] = await deriveCredentialPda({
     authority: authority.address,
     name: process.env.CREDENTIAL_NAME!
   });
+
+  console.log(`Credential PDA: ${credentialPda}`);
 
   const credentialInput: CreateCredentialInput = {
     payer: payer,
@@ -53,6 +54,8 @@ async function setupCredentialsAndSchemas() {
     name: process.env.SCHEMA_NAME_TWFIDO!,
     version: parseInt(process.env.SCHEMA_VERSION_TWFIDO!)
   });
+
+  console.log(`Twfido Schema PDA: ${twfidoSchemaPda}`);
 
   const attestationSchema = {
     merkle_root: 32,  // 32 bytes for merkle root
@@ -76,6 +79,8 @@ async function setupCredentialsAndSchemas() {
     name: process.env.SCHEMA_NAME_TWLAND!,
     version: parseInt(process.env.SCHEMA_VERSION_TWLAND!)
   });
+
+  console.log(`Twland Schema PDA: ${twlandSchemaPda}`);
 
   const twlandSchemaInput: CreateSchemaInput = {
     payer: payer,
@@ -111,14 +116,14 @@ async function setupCredentialsAndSchemas() {
 
     const signature = getSignatureFromTransaction(signedTransaction);
     
-    console.log('✅ Setup completed successfully!');
-    console.log(`Transaction signature: ${signature}`);
+    console.log('設定完成成功！');
+    console.log(`交易簽名: ${signature}`);
     console.log(`Credential PDA: ${credentialPda}`);
     console.log(`Twfido Schema PDA: ${twfidoSchemaPda}`);
     console.log(`Twland Schema PDA: ${twlandSchemaPda}`);
 
   } catch (error) {
-    console.error('❌ Setup failed:', error);
+    console.error('設定失敗:', error);
     throw error;
   }
 }

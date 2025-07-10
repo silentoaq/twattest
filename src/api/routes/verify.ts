@@ -1,5 +1,5 @@
 import express from 'express';
-import { startVerification, handleCallback } from '../services/oid4vp.ts';
+import { startVerification, handleCallback, getVPRequest } from '../services/oid4vp.js';
 
 const router = express.Router();
 
@@ -12,6 +12,24 @@ router.post('/start', async (req, res) => {
   } catch (error) {
     res.status(500).json({ 
       success: false, 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    });
+  }
+});
+
+// 提供 OID4VP 請求定義
+router.get('/request/:requestId', async (req, res) => {
+  try {
+    const { requestId } = req.params;
+    const vpRequest = await getVPRequest(requestId);
+    
+    if (!vpRequest) {
+      return res.status(404).json({ error: 'Request not found or expired' });
+    }
+    
+    res.json(vpRequest);
+  } catch (error) {
+    res.status(500).json({ 
       error: error instanceof Error ? error.message : 'Unknown error' 
     });
   }

@@ -143,7 +143,7 @@ export const ResultPage: React.FC = () => {
                   <div className="border rounded p-3">
                     <h4 className="font-medium text-sm">Twfido (自然人憑證)</h4>
                     <p className="text-sm text-muted-foreground">
-                      狀態: {attestationStatus.twfido.exists ? '✅ 已認證' : '❌ 未認證'}
+                      狀態: {attestationStatus.twfido.exists ? '[已認證]' : '[未認證]'}
                     </p>
                     {attestationStatus.twfido.exists && (
                       <div className="text-xs font-mono mt-1">
@@ -157,7 +157,7 @@ export const ResultPage: React.FC = () => {
                   <div className="border rounded p-3">
                     <h4 className="font-medium text-sm">Twland (房產憑證)</h4>
                     <p className="text-sm text-muted-foreground">
-                      狀態: {attestationStatus.twland.exists ? '✅ 已認證' : '❌ 未認證'}
+                      狀態: {attestationStatus.twland.exists ? '[已認證]' : '[未認證]'}
                     </p>
                     {attestationStatus.twland.exists && (
                       <div className="text-xs font-mono mt-1">
