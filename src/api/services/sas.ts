@@ -25,9 +25,8 @@ import {
     type CreateAttestationInput
 } from 'sas-lib';
 import bs58 from 'bs58';
+import crypto from 'crypto';
 import { SDJWTVerificationResult, AttestationData, SUPPORTED_ISSUERS } from '../types.js';
-
-
 
 type RpcClient = {
     rpc: Rpc<SolanaRpcApi>;
@@ -65,6 +64,17 @@ async function getKeypairs() {
     return { authorityKeypair, payerKeypair };
 }
 
+function generateNonce(holderAddress: string, issuerDid: string, credentialReference: string): Address {
+    if (issuerDid === SUPPORTED_ISSUERS.TWFIDO) {
+        return holderAddress as Address;
+    } else {
+        const hash = crypto.createHash('sha256')
+            .update(holderAddress + credentialReference)
+            .digest();
+        return bs58.encode(hash) as Address;
+    }
+}
+
 export async function createAttestation(verificationResult: SDJWTVerificationResult): Promise<string> {
     try {
         const { rpc, rpcSubscriptions } = createSolanaClient();
@@ -87,17 +97,19 @@ export async function createAttestation(verificationResult: SDJWTVerificationRes
         });
 
         const holderAddress = verificationResult.holderDid.replace('did:pkh:sol:', '') as Address;
+        const nonce = generateNonce(holderAddress, verificationResult.issuerDid, verificationResult.credentialReference);
 
         const [attestationPda] = await deriveAttestationPda({
             credential: credentialPda,
             schema: schemaPda,
-            nonce: holderAddress
+            nonce: nonce
         });
 
         console.log('Using Program ID:', process.env.SAS_PROGRAM_ID);
         console.log('Authority address:', authorityKeypair.address);
         console.log('Payer address:', payerKeypair.address);
         console.log('Holder address:', holderAddress);
+        console.log('Nonce:', nonce);
         console.log('Credential PDA:', credentialPda);
         console.log('Schema PDA:', schemaPda);
         console.log('Attestation PDA:', attestationPda);
@@ -118,7 +130,7 @@ export async function createAttestation(verificationResult: SDJWTVerificationRes
             authority: authorityKeypair,
             credential: credentialPda,
             schema: schemaPda,
-            nonce: holderAddress,
+            nonce: nonce,
             expiry: verificationResult.expiry,
             data: attestationData,
             attestation: attestationPda
@@ -176,27 +188,10 @@ export async function getAttestationStatus(holderDid: string): Promise<any> {
                 version: schemaInfo.version
             });
 
-            const [attestationPda] = await deriveAttestationPda({
-                credential: credentialPda,
-                schema: schemaPda,
-                nonce: holderAddress
-            });
-
-            try {
-                const attestation = await fetchAttestation(rpc, attestationPda);
-                results[issuerKey.toLowerCase()] = {
-                    exists: !!attestation,
-                    address: attestationPda,
-                    data: attestation ? deserializeAttestationData(attestation.data.data) : null,
-                    expiry: attestation ? Number(attestation.data.expiry) : null
-                };
-            } catch {
-                results[issuerKey.toLowerCase()] = {
-                    exists: false,
-                    address: attestationPda,
-                    data: null,
-                    expiry: null
-                };
+            if (issuerDid === SUPPORTED_ISSUERS.TWFIDO) {
+                await queryTwfidoAttestation(rpc, credentialPda, schemaPda, holderAddress, results, issuerKey);
+            } else if (issuerDid === SUPPORTED_ISSUERS.TWLAND) {
+                await queryTwlandAttestations(rpc, credentialPda, schemaPda, holderAddress, results, issuerKey);
             }
         }
 
@@ -204,6 +199,95 @@ export async function getAttestationStatus(holderDid: string): Promise<any> {
     } catch (error) {
         console.error('Error getting attestation status:', error);
         throw error;
+    }
+}
+
+async function queryTwfidoAttestation(rpc: Rpc<SolanaRpcApi>, credentialPda: Address, schemaPda: Address, holderAddress: string, results: any, issuerKey: string) {
+    const nonce = holderAddress as Address;
+    const [attestationPda] = await deriveAttestationPda({
+        credential: credentialPda,
+        schema: schemaPda,
+        nonce: nonce
+    });
+
+    try {
+        const attestation = await fetchAttestation(rpc, attestationPda);
+        results[issuerKey.toLowerCase()] = {
+            exists: true,
+            address: attestationPda,
+            data: deserializeAttestationData(attestation.data.data),
+            expiry: Number(attestation.data.expiry)
+        };
+    } catch {
+        results[issuerKey.toLowerCase()] = {
+            exists: false,
+            address: attestationPda,
+            data: null,
+            expiry: null
+        };
+    }
+}
+
+async function queryTwlandAttestations(rpc: Rpc<SolanaRpcApi>, credentialPda: Address, schemaPda: Address, holderAddress: string, results: any, issuerKey: string) {
+    console.log(`Debug: Querying twland attestations for holder: ${holderAddress}`);
+
+    try {
+        const programAccounts = await rpc.getProgramAccounts(process.env.SAS_PROGRAM_ID! as Address, {
+            encoding: 'base64'
+        }).send();
+
+        console.log(`Debug: Found ${programAccounts.length} total program accounts`);
+
+        const holderAttestations = [];
+
+        for (const account of programAccounts) {
+            try {
+                const attestation = await fetchAttestation(rpc, account.pubkey as Address);
+
+                if (attestation.data.schema !== schemaPda) {
+                    continue;
+                }
+
+                const attestationData = deserializeAttestationData(attestation.data.data);
+                console.log(`Debug: Account ${account.pubkey} - credentialReference: ${attestationData.credentialReference}`);
+
+                const expectedNonce = generateNonce(holderAddress, SUPPORTED_ISSUERS.TWLAND, attestationData.credentialReference);
+                const [expectedPda] = await deriveAttestationPda({
+                    credential: credentialPda,
+                    schema: schemaPda,
+                    nonce: expectedNonce
+                });
+
+                console.log(`Debug: Expected nonce: ${expectedNonce}, Expected PDA: ${expectedPda}`);
+
+                if (expectedPda === account.pubkey) {
+                    console.log(`Debug: Match found for credential: ${attestationData.credentialReference}`);
+                    holderAttestations.push({
+                        address: account.pubkey,
+                        data: attestationData,
+                        expiry: Number(attestation.data.expiry)
+                    });
+                }
+            } catch (error) {
+                continue;
+            }
+        }
+
+        results[issuerKey.toLowerCase()] = {
+            exists: holderAttestations.length > 0,
+            attestations: holderAttestations,
+            count: holderAttestations.length
+        };
+
+        console.log(`Debug: Final result - found ${holderAttestations.length} attestations`);
+
+    } catch (error) {
+        console.log(`Debug: Query failed: ${error}`);
+        results[issuerKey.toLowerCase()] = {
+            exists: false,
+            attestations: [],
+            count: 0
+        };
     }
 }
 
@@ -225,12 +309,10 @@ function getSchemaInfo(issuerDid: string): { name: string; version: number } | n
 }
 
 function serializeAttestationData(data: AttestationData): Uint8Array {
-    // merkle_root: Vec<u8> 格式 - 長度前綴 + 數據
     const merkleRootBytes = Buffer.from(data.merkleRoot, 'hex');
     const merkleRootLength = Buffer.allocUnsafe(4);
     merkleRootLength.writeUInt32LE(merkleRootBytes.length, 0);
 
-    // credential_reference: String 格式 - 長度前綴 + UTF-8 數據  
     const credentialRefBytes = Buffer.from(data.credentialReference, 'utf8');
     const credentialRefLength = Buffer.allocUnsafe(4);
     credentialRefLength.writeUInt32LE(credentialRefBytes.length, 0);
@@ -245,14 +327,12 @@ function deserializeAttestationData(data: Uint8Array | ReadonlyUint8Array): Atte
     const buffer = Buffer.from(data as Uint8Array);
     let offset = 0;
 
-    // 讀取 merkle_root (Vec<u8> 格式)
     const merkleRootLength = buffer.readUInt32LE(offset);
     offset += 4;
     const merkleRootBytes = buffer.slice(offset, offset + merkleRootLength);
     const merkleRoot = merkleRootBytes.toString('hex');
     offset += merkleRootLength;
 
-    // 讀取 credential_reference (String 格式)
     const credentialRefLength = buffer.readUInt32LE(offset);
     offset += 4;
     const credentialRefBytes = buffer.slice(offset, offset + credentialRefLength);
