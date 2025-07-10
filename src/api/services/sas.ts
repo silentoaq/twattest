@@ -105,18 +105,18 @@ export async function createAttestation(verificationResult: SDJWTVerificationRes
             nonce: nonce
         });
 
-        console.log('Using Program ID:', process.env.SAS_PROGRAM_ID);
-        console.log('Authority address:', authorityKeypair.address);
-        console.log('Payer address:', payerKeypair.address);
-        console.log('Holder address:', holderAddress);
-        console.log('Nonce:', nonce);
-        console.log('Credential PDA:', credentialPda);
-        console.log('Schema PDA:', schemaPda);
-        console.log('Attestation PDA:', attestationPda);
+        //console.log('Using Program ID:', process.env.SAS_PROGRAM_ID);
+        //console.log('Authority address:', authorityKeypair.address);
+        //console.log('Payer address:', payerKeypair.address);
+        //console.log('Holder address:', holderAddress);
+        //console.log('Nonce:', nonce);
+        //console.log('Credential PDA:', credentialPda);
+        //console.log('Schema PDA:', schemaPda);
+        //console.log('Attestation PDA:', attestationPda);
 
         const existingAttestation = await fetchAttestation(rpc, attestationPda).catch(() => null);
         if (existingAttestation) {
-            console.log('Attestation already exists for this holder');
+            //console.log('Attestation already exists for this holder');
             return 'exists';
         }
 
@@ -156,7 +156,7 @@ export async function createAttestation(verificationResult: SDJWTVerificationRes
         });
 
         const signature = getSignatureFromTransaction(signedTransaction);
-        console.log(`Attestation created with signature: ${signature}`);
+        //console.log(`Attestation created with signature: ${signature}`);
 
         return signature;
     } catch (error) {
@@ -229,14 +229,14 @@ async function queryTwfidoAttestation(rpc: Rpc<SolanaRpcApi>, credentialPda: Add
 }
 
 async function queryTwlandAttestations(rpc: Rpc<SolanaRpcApi>, credentialPda: Address, schemaPda: Address, holderAddress: string, results: any, issuerKey: string) {
-    console.log(`Debug: Querying twland attestations for holder: ${holderAddress}`);
+    //console.log(`Debug: Querying twland attestations for holder: ${holderAddress}`);
 
     try {
         const programAccounts = await rpc.getProgramAccounts(process.env.SAS_PROGRAM_ID! as Address, {
             encoding: 'base64'
         }).send();
 
-        console.log(`Debug: Found ${programAccounts.length} total program accounts`);
+        //console.log(`Debug: Found ${programAccounts.length} total program accounts`);
 
         const holderAttestations = [];
 
@@ -249,7 +249,7 @@ async function queryTwlandAttestations(rpc: Rpc<SolanaRpcApi>, credentialPda: Ad
                 }
 
                 const attestationData = deserializeAttestationData(attestation.data.data);
-                console.log(`Debug: Account ${account.pubkey} - credentialReference: ${attestationData.credentialReference}`);
+                //console.log(`Debug: Account ${account.pubkey} - credentialReference: ${attestationData.credentialReference}`);
 
                 const expectedNonce = generateNonce(holderAddress, SUPPORTED_ISSUERS.TWLAND, attestationData.credentialReference);
                 const [expectedPda] = await deriveAttestationPda({
@@ -258,10 +258,10 @@ async function queryTwlandAttestations(rpc: Rpc<SolanaRpcApi>, credentialPda: Ad
                     nonce: expectedNonce
                 });
 
-                console.log(`Debug: Expected nonce: ${expectedNonce}, Expected PDA: ${expectedPda}`);
+                //console.log(`Debug: Expected nonce: ${expectedNonce}, Expected PDA: ${expectedPda}`);
 
                 if (expectedPda === account.pubkey) {
-                    console.log(`Debug: Match found for credential: ${attestationData.credentialReference}`);
+                    //console.log(`Debug: Match found for credential: ${attestationData.credentialReference}`);
                     holderAttestations.push({
                         address: account.pubkey,
                         data: attestationData,
@@ -279,10 +279,10 @@ async function queryTwlandAttestations(rpc: Rpc<SolanaRpcApi>, credentialPda: Ad
             count: holderAttestations.length
         };
 
-        console.log(`Debug: Final result - found ${holderAttestations.length} attestations`);
+        //console.log(`Debug: Final result - found ${holderAttestations.length} attestations`);
 
     } catch (error) {
-        console.log(`Debug: Query failed: ${error}`);
+        //console.log(`Debug: Query failed: ${error}`);
         results[issuerKey.toLowerCase()] = {
             exists: false,
             attestations: [],

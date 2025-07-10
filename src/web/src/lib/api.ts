@@ -12,19 +12,32 @@ export interface VerificationStartResponse {
   error?: string;
 }
 
+export interface TwfidoAttestation {
+  exists: boolean;
+  address: string;
+  data: {
+    merkleRoot: string;
+    credentialReference: string;
+  } | null;
+  expiry: number | null;
+}
+
+export interface TwlandAttestation {
+  exists: boolean;
+  attestations: Array<{
+    address: string;
+    data: {
+      merkleRoot: string;
+      credentialReference: string;
+    };
+    expiry: number;
+  }>;
+  count: number;
+}
+
 export interface AttestationStatus {
-  twfido?: {
-    exists: boolean;
-    address: string;
-    data: any;
-    expiry: number | null;
-  };
-  twland?: {
-    exists: boolean;
-    address: string;
-    data: any;
-    expiry: number | null;
-  };
+  twfido?: TwfidoAttestation;
+  twland?: TwlandAttestation;
 }
 
 export const apiService = {

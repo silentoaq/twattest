@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { apiService } from '@/lib/api';
+import { apiService, type AttestationStatus } from '@/lib/api';
 import { Copy, CheckCircle2, RefreshCw, ArrowLeft, ExternalLink } from 'lucide-react';
 import QRCode from 'qrcode';
 
@@ -18,7 +18,7 @@ export const ResultPage: React.FC = () => {
   const state = location.state as LocationState;
   
   const [qrCodeUrl, setQrCodeUrl] = useState('');
-  const [attestationStatus, setAttestationStatus] = useState<any>(null);
+  const [attestationStatus, setAttestationStatus] = useState<AttestationStatus | null>(null);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
@@ -29,7 +29,6 @@ export const ResultPage: React.FC = () => {
       return;
     }
 
-    // 生成 QR 碼
     QRCode.toDataURL(state.vpRequestUri, {
       width: 256,
       margin: 2,
@@ -47,7 +46,6 @@ export const ResultPage: React.FC = () => {
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       console.error('複製失敗:', err);
-      // 降級方案
       const textArea = document.createElement('textarea');
       textArea.value = state.vpRequestUri;
       document.body.appendChild(textArea);
@@ -184,7 +182,7 @@ export const ResultPage: React.FC = () => {
 
             {error && (
               <div className="text-sm text-red-500 bg-red-50 dark:bg-red-900/20 p-3 rounded-lg border border-red-200 dark:border-red-800">
-                ⚠️ {error}
+               {error}
               </div>
             )}
 
@@ -192,6 +190,7 @@ export const ResultPage: React.FC = () => {
               <div className="space-y-3">
                 <h3 className="font-medium text-lg">認證狀態</h3>
                 
+                {/* Twfido (自然人憑證) */}
                 {attestationStatus.twfido && (
                   <div className={`border rounded-lg p-4 ${
                     attestationStatus.twfido.exists 
@@ -199,7 +198,7 @@ export const ResultPage: React.FC = () => {
                       : 'border-gray-200 bg-gray-50 dark:bg-gray-800 dark:border-gray-700'
                   }`}>
                     <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-medium text-sm"> Twfido (自然人憑證)</h4>
+                      <h4 className="font-medium text-sm">Twfido (自然人憑證)</h4>
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                         attestationStatus.twfido.exists
                           ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100'
@@ -208,15 +207,25 @@ export const ResultPage: React.FC = () => {
                         {attestationStatus.twfido.exists ? '已認證' : '未認證'}
                       </span>
                     </div>
-                    {attestationStatus.twfido.exists && (
-                      <div className="text-xs font-mono mt-2 p-2 bg-white dark:bg-gray-900 rounded border">
-                        <div className="text-gray-500 dark:text-gray-400">鏈上地址:</div>
-                        <div className="break-all">{attestationStatus.twfido.address}</div>
+                    {attestationStatus.twfido.exists && attestationStatus.twfido.data && (
+                      <div className="space-y-2">
+                        <div className="text-xs font-mono p-2 bg-white dark:bg-gray-900 rounded border">
+                          <div className="text-gray-500 dark:text-gray-400 mb-1">鏈上地址:</div>
+                          <div className="break-all mb-2">{attestationStatus.twfido.address}</div>
+                          <div className="text-gray-500 dark:text-gray-400 mb-1">憑證參考:</div>
+                          <div className="break-all">{attestationStatus.twfido.data.credentialReference}</div>
+                        </div>
+                        {attestationStatus.twfido.expiry && (
+                          <div className="text-xs text-gray-500">
+                            過期時間: {new Date(attestationStatus.twfido.expiry * 1000).toLocaleString('zh-TW')}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
                 )}
 
+                {/* Twland (房產憑證) */}
                 {attestationStatus.twland && (
                   <div className={`border rounded-lg p-4 ${
                     attestationStatus.twland.exists 
@@ -224,19 +233,30 @@ export const ResultPage: React.FC = () => {
                       : 'border-gray-200 bg-gray-50 dark:bg-gray-800 dark:border-gray-700'
                   }`}>
                     <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-medium text-sm"> Twland (房產憑證)</h4>
+                      <h4 className="font-medium text-sm">Twland (房產憑證)</h4>
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                         attestationStatus.twland.exists
                           ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100'
                           : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
                       }`}>
-                        {attestationStatus.twland.exists ? '已認證' : '未認證'}
+                        {attestationStatus.twland.exists 
+                          ? `已認證 (${attestationStatus.twland.count} 筆)` 
+                          : '未認證'}
                       </span>
                     </div>
-                    {attestationStatus.twland.exists && (
-                      <div className="text-xs font-mono mt-2 p-2 bg-white dark:bg-gray-900 rounded border">
-                        <div className="text-gray-500 dark:text-gray-400">鏈上地址:</div>
-                        <div className="break-all">{attestationStatus.twland.address}</div>
+                    {attestationStatus.twland.exists && attestationStatus.twland.attestations.length > 0 && (
+                      <div className="space-y-2">
+                        {attestationStatus.twland.attestations.map((attestation, index) => (
+                          <div key={index} className="text-xs font-mono p-2 bg-white dark:bg-gray-900 rounded border">
+                            <div className="text-gray-500 dark:text-gray-400 mb-1">房產 #{index + 1}:</div>
+                            <div className="break-all mb-2">{attestation.address}</div>
+                            <div className="text-gray-500 dark:text-gray-400 mb-1">憑證參考:</div>
+                            <div className="break-all mb-2">{attestation.data.credentialReference}</div>
+                            <div className="text-gray-500 dark:text-gray-400 text-xs">
+                              過期時間: {new Date(attestation.expiry * 1000).toLocaleString('zh-TW')}
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>

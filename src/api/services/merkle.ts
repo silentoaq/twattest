@@ -116,7 +116,7 @@ export async function verifySDJWTSignature(jwt: string, issuerDid: string): Prom
     const headerData = JSON.parse(Buffer.from(header, 'base64url').toString());
     const payloadData = JSON.parse(Buffer.from(payload, 'base64url').toString());
 
-    console.log('JWT Header:', headerData);
+    //console.log('JWT Header:', headerData);
 
     // 檢查基本 JWT 結構
     if (headerData.alg !== 'ES256') {
@@ -143,9 +143,9 @@ export async function verifySDJWTSignature(jwt: string, issuerDid: string): Prom
     }
 
     // 獲取 DID 文件
-    console.log(`Fetching DID document for issuer: ${issuerDid}`);
+    //console.log(`Fetching DID document for issuer: ${issuerDid}`);
     const didDoc = await fetchDIDDocument(issuerDid);
-    console.log('Available verification methods:', didDoc.verificationMethod);
+    //console.log('Available verification methods:', didDoc.verificationMethod);
 
     if (!didDoc.verificationMethod || didDoc.verificationMethod.length === 0) {
       console.error('No verification methods found in DID document');
@@ -178,7 +178,7 @@ export async function verifySDJWTSignature(jwt: string, issuerDid: string): Prom
       return false;
     }
 
-    console.log('Selected verification method:', verificationMethod);
+    //console.log('Selected verification method:', verificationMethod);
 
     // 導入公鑰
     const publicKey = importJWKToPublicKey(verificationMethod.publicKeyJwk);
@@ -192,13 +192,13 @@ export async function verifySDJWTSignature(jwt: string, issuerDid: string): Prom
       dsaEncoding: 'ieee-p1363'
     }, signatureData);
 
-    console.log('Signed data length:', signedData.length);
-    console.log('Signature data length:', signatureData.length);
-    console.log('Public key type:', publicKey.asymmetricKeyType);
-    console.log('Is valid:', isValid);
+    //console.log('Signed data length:', signedData.length);
+    //console.log('Signature data length:', signatureData.length);
+    //console.log('Public key type:', publicKey.asymmetricKeyType);
+    //console.log('Is valid:', isValid);
 
     if (isValid) {
-      console.log(`JWT signature verified successfully for issuer: ${issuerDid}`);
+      //console.log(`JWT signature verified successfully for issuer: ${issuerDid}`);
     } else {
       console.error(`JWT signature verification failed for issuer: ${issuerDid}`);
     }
