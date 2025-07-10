@@ -15,17 +15,17 @@ export function parseSDJWT(sdJwtToken: string): ParsedSDJWT {
   const parts = sdJwtToken.split('~');
   const jwt = parts[0];
   const disclosures = parts.slice(1);
-  
+
   // 解析 JWT payload
   const payload = JSON.parse(Buffer.from(jwt.split('.')[1], 'base64url').toString());
-  
+
   // 提取必要資訊
   const holderDid = payload.sub;
   const issuerDid = payload.iss;
   const credentialId = payload.vc?.id || '';
   const sdHashes = payload.vc?.credentialSubject?._sd || [];
   const expiry = payload.exp;
-  
+
   return {
     jwt,
     disclosures,
@@ -57,15 +57,15 @@ async function fetchDIDDocument(didUri: string): Promise<DIDDocument> {
   if (!didUri.startsWith('did:web:')) {
     throw new Error(`Unsupported DID method: ${didUri}`);
   }
-  
+
   const domain = didUri.replace('did:web:', '');
   const didDocUrl = `https://${domain}/.well-known/did.json`;
-  
+
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-    const response = await fetch(didDocUrl, { 
+    const response = await fetch(didDocUrl, {
       headers: {
         'Accept': 'application/json'
       },
@@ -73,11 +73,11 @@ async function fetchDIDDocument(didUri: string): Promise<DIDDocument> {
     });
 
     clearTimeout(timeoutId);
-    
+
     if (!response.ok) {
       throw new Error(`Failed to fetch DID document: ${response.status} ${response.statusText}`);
     }
-    
+
     const didDoc = await response.json();
     return didDoc;
   } catch (error) {
@@ -106,7 +106,7 @@ function importJWKToPublicKey(jwk: any): crypto.KeyObject {
 export async function verifySDJWTSignature(jwt: string, issuerDid: string): Promise<boolean> {
   try {
     const [header, payload, signature] = jwt.split('.');
-    
+
     if (!header || !payload || !signature) {
       console.error('Invalid JWT format');
       return false;
@@ -115,7 +115,9 @@ export async function verifySDJWTSignature(jwt: string, issuerDid: string): Prom
     // 解析 JWT header
     const headerData = JSON.parse(Buffer.from(header, 'base64url').toString());
     const payloadData = JSON.parse(Buffer.from(payload, 'base64url').toString());
-    
+
+    console.log('JWT Header:', headerData);
+
     // 檢查基本 JWT 結構
     if (headerData.alg !== 'ES256') {
       console.error(`Unsupported algorithm: ${headerData.alg}`);
@@ -143,7 +145,8 @@ export async function verifySDJWTSignature(jwt: string, issuerDid: string): Prom
     // 獲取 DID 文件
     console.log(`Fetching DID document for issuer: ${issuerDid}`);
     const didDoc = await fetchDIDDocument(issuerDid);
-    
+    console.log('Available verification methods:', didDoc.verificationMethod);
+
     if (!didDoc.verificationMethod || didDoc.verificationMethod.length === 0) {
       console.error('No verification methods found in DID document');
       return false;
@@ -151,20 +154,20 @@ export async function verifySDJWTSignature(jwt: string, issuerDid: string): Prom
 
     // 找到對應的驗證方法
     let verificationMethod = null;
-    
+
     // 如果 header 中有 kid，使用指定的 key
     if (headerData.kid) {
-      verificationMethod = didDoc.verificationMethod.find(vm => 
+      verificationMethod = didDoc.verificationMethod.find(vm =>
         vm.id === headerData.kid || vm.id.endsWith(headerData.kid)
       );
     }
-    
+
     // 如果沒有 kid 或找不到，使用 assertionMethod 中的第一個
     if (!verificationMethod && didDoc.assertionMethod && didDoc.assertionMethod.length > 0) {
       const assertionMethodId = didDoc.assertionMethod[0];
       verificationMethod = didDoc.verificationMethod.find(vm => vm.id === assertionMethodId);
     }
-    
+
     // 如果還是沒有，使用第一個驗證方法
     if (!verificationMethod) {
       verificationMethod = didDoc.verificationMethod[0];
@@ -175,16 +178,24 @@ export async function verifySDJWTSignature(jwt: string, issuerDid: string): Prom
       return false;
     }
 
+    console.log('Selected verification method:', verificationMethod);
+
     // 導入公鑰
     const publicKey = importJWKToPublicKey(verificationMethod.publicKeyJwk);
 
-    // 驗證簽名
+    // 驗證簽名 - 修正的部分
     const signatureData = Buffer.from(signature, 'base64url');
-    const signedData = `${header}.${payload}`;
-    
-    const verifier = crypto.createVerify('SHA256');
-    verifier.update(signedData);
-    const isValid = verifier.verify(publicKey, signatureData);
+    const signedData = Buffer.from(`${header}.${payload}`);
+
+    const isValid = crypto.verify('sha256', signedData, {
+      key: publicKey,
+      dsaEncoding: 'ieee-p1363'
+    }, signatureData);
+
+    console.log('Signed data length:', signedData.length);
+    console.log('Signature data length:', signatureData.length);
+    console.log('Public key type:', publicKey.asymmetricKeyType);
+    console.log('Is valid:', isValid);
 
     if (isValid) {
       console.log(`JWT signature verified successfully for issuer: ${issuerDid}`);
@@ -204,17 +215,17 @@ export function calculateMerkleRoot(sdHashes: string[]): string {
   if (sdHashes.length === 0) {
     return '';
   }
-  
+
   if (sdHashes.length === 1) {
     return sdHashes[0].replace('sha-256:', '');
   }
-  
+
   // 實現 Merkle Tree
   let currentLevel = sdHashes.map(hash => Buffer.from(hash.replace('sha-256:', ''), 'base64url'));
-  
+
   while (currentLevel.length > 1) {
     const nextLevel: Buffer[] = [];
-    
+
     for (let i = 0; i < currentLevel.length; i += 2) {
       if (i + 1 < currentLevel.length) {
         // 合併兩個雜湊
@@ -226,9 +237,9 @@ export function calculateMerkleRoot(sdHashes: string[]): string {
         nextLevel.push(currentLevel[i]);
       }
     }
-    
+
     currentLevel = nextLevel;
   }
-  
+
   return currentLevel[0].toString('hex');
 }

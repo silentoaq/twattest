@@ -25,7 +25,7 @@ import {
     type CreateAttestationInput
 } from 'sas-lib';
 import bs58 from 'bs58';
-import { SDJWTVerificationResult, AttestationData, SUPPORTED_ISSUERS, SCHEMA_NAMES } from '../types.js';
+import { SDJWTVerificationResult, AttestationData, SUPPORTED_ISSUERS } from '../types.js';
 
 
 
@@ -44,18 +44,22 @@ let authorityKeypair: any = null;
 let payerKeypair: any = null;
 
 async function getKeypairs() {
-    if (!authorityKeypair) {
-        const keyBytes = bs58.decode(process.env.AUTHORITY_KEYPAIR!);
-        authorityKeypair = await createKeyPairSignerFromPrivateKeyBytes(
-            keyBytes.slice(0, 32)
-        );
-    }
-
     if (!payerKeypair) {
         const keyBytes = bs58.decode(process.env.PAYER_KEYPAIR!);
         payerKeypair = await createKeyPairSignerFromPrivateKeyBytes(
             keyBytes.slice(0, 32)
         );
+    }
+
+    if (!authorityKeypair) {
+        if (process.env.AUTHORITY_KEYPAIR === process.env.PAYER_KEYPAIR) {
+            authorityKeypair = payerKeypair;
+        } else {
+            const keyBytes = bs58.decode(process.env.AUTHORITY_KEYPAIR!);
+            authorityKeypair = await createKeyPairSignerFromPrivateKeyBytes(
+                keyBytes.slice(0, 32)
+            );
+        }
     }
 
     return { authorityKeypair, payerKeypair };
@@ -90,7 +94,15 @@ export async function createAttestation(verificationResult: SDJWTVerificationRes
             nonce: holderAddress
         });
 
-        const existingAttestation = await fetchAttestation(rpc, attestationPda);
+        console.log('Using Program ID:', process.env.SAS_PROGRAM_ID);
+        console.log('Authority address:', authorityKeypair.address);
+        console.log('Payer address:', payerKeypair.address);
+        console.log('Holder address:', holderAddress);
+        console.log('Credential PDA:', credentialPda);
+        console.log('Schema PDA:', schemaPda);
+        console.log('Attestation PDA:', attestationPda);
+
+        const existingAttestation = await fetchAttestation(rpc, attestationPda).catch(() => null);
         if (existingAttestation) {
             console.log('Attestation already exists for this holder');
             return 'exists';
@@ -199,12 +211,12 @@ function getSchemaInfo(issuerDid: string): { name: string; version: number } | n
     switch (issuerDid) {
         case SUPPORTED_ISSUERS.TWFIDO:
             return {
-                name: SCHEMA_NAMES.TWFIDO,
+                name: process.env.SCHEMA_NAME_TWFIDO!,
                 version: parseInt(process.env.SCHEMA_VERSION_TWFIDO!) || 1
             };
         case SUPPORTED_ISSUERS.TWLAND:
             return {
-                name: SCHEMA_NAMES.TWLAND,
+                name: process.env.SCHEMA_NAME_TWLAND!,
                 version: parseInt(process.env.SCHEMA_VERSION_TWLAND!) || 1
             };
         default:

@@ -29,11 +29,6 @@ export const SUPPORTED_ISSUERS = {
   TWLAND: 'did:web:twland.ddns.net'
 } as const;
 
-export const SCHEMA_NAMES = {
-  TWFIDO: 'Twfido Identity Verification',
-  TWLAND: 'Twland Property Verification'
-} as const;
-
 export const API_ENDPOINTS = {
   VERIFY_START: '/api/verify/start',
   VERIFY_CALLBACK: '/api/verify/callback',
