@@ -1,0 +1,12 @@
+{
+  "name": "twattest-sdk-test",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "test:node": "node test-sdk-node.js",
+    "test:web": "echo '請用瀏覽器開啟 test-sdk-web.html'"
+  },
+  "dependencies": {
+    "node-fetch": "^3.3.2"
+  }
+}

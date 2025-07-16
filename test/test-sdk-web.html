@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TwattestSDK Web 測試</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; }
+        .result { background: #f5f5f5; padding: 10px; margin: 10px 0; }
+        .error { background: #ffebee; color: #c62828; }
+        .success { background: #e8f5e8; color: #2e7d32; }
+        button { padding: 8px 16px; margin: 5px; }
+        #qrcode { margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <h1>TwattestSDK Web 測試</h1>
+    
+    <div class="test-section">
+        <h3>1. 初始化 SDK</h3>
+        <button onclick="initSDK()">初始化 SDK</button>
+        <div id="init-result" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>2. 檢查用戶權限</h3>
+        <input type="text" id="user-did" placeholder="輸入用戶 DID" value="did:pkh:sol:A3BE2TdV7vSpAK8qkgoiUUG6GTsWJCgtG46LvheQstjV">
+        <button onclick="checkPermissions()">檢查權限</button>
+        <div id="permissions-result" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>3. 建立資料請求</h3>
+        <select id="credential-type">
+            <option value="CitizenCredential">自然人憑證</option>
+            <option value="PropertyCredential">產權憑證</option>
+        </select>
+        <button onclick="requestData()">建立請求</button>
+        <div id="request-result" class="result"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>4. 生成 QR 碼</h3>
+        <input type="text" id="vp-uri" placeholder="VP Request URI">
+        <button onclick="generateQR()">生成 QR 碼</button>
+        <div id="qrcode"></div>
+    </div>
+
+    <script type="module">
+        let sdk = null;
+
+        window.initSDK = async function() {
+            try {
+                // 動態導入 SDK
+                const { TwattestSDK } = await import('../dist/sdk/web.js');
+                
+                sdk = new TwattestSDK({
+                    baseUrl: 'http://localhost:3001/api'
+                });
+                
+                document.getElementById('init-result').innerHTML = 
+                    '<span class="success">✅ SDK 初始化成功</span>';
+            } catch (error) {
+                document.getElementById('init-result').innerHTML = 
+                    `<span class="error">❌ 初始化失敗: ${error.message}</span>`;
+            }
+        };
+
+        window.checkPermissions = async function() {
+            if (!sdk) {
+                alert('請先初始化 SDK');
+                return;
+            }
+
+            const userDid = document.getElementById('user-did').value;
+            const resultDiv = document.getElementById('permissions-result');
+
+            try {
+                const permissions = await sdk.checkPermissions(userDid);
+                resultDiv.innerHTML = `
+                    <span class="success">✅ 權限查詢成功</span>
+                    <pre>${JSON.stringify(permissions, null, 2)}</pre>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = 
+                    `<span class="error">❌ 查詢失敗: ${error.message}</span>`;
+            }
+        };
+
+        window.requestData = async function() {
+            if (!sdk) {
+                alert('請先初始化 SDK');
+                return;
+            }
+
+            const credentialType = document.getElementById('credential-type').value;
+            const resultDiv = document.getElementById('request-result');
+
+            try {
+                const config = {
+                    credentialType,
+                    requiredFields: credentialType === 'PropertyCredential' 
+                        ? ['address', 'land_area', 'building_area']
+                        : ['name', 'id_number'],
+                    purpose: '測試用途',
+                    dappDomain: 'localhost:3000'
+                };
+
+                const session = await sdk.requestData(config);
+                
+                resultDiv.innerHTML = `
+                    <span class="success">✅ 資料請求成功</span>
+                    <pre>${JSON.stringify(session, null, 2)}</pre>
+                `;
+
+                // 自動填入 VP URI
+                document.getElementById('vp-uri').value = session.vpRequestUri;
+            } catch (error) {
+                resultDiv.innerHTML = 
+                    `<span class="error">❌ 請求失敗: ${error.message}</span>`;
+            }
+        };
+
+        window.generateQR = async function() {
+            if (!sdk) {
+                alert('請先初始化 SDK');
+                return;
+            }
+
+            const vpUri = document.getElementById('vp-uri').value;
+            const qrDiv = document.getElementById('qrcode');
+
+            if (!vpUri) {
+                alert('請輸入 VP Request URI');
+                return;
+            }
+
+            try {
+                const qrCodeDataUrl = await sdk.generateQRCode(vpUri);
+                qrDiv.innerHTML = `
+                    <span class="success">✅ QR 碼生成成功</span><br>
+                    <img src="${qrCodeDataUrl}" alt="QR Code">
+                `;
+            } catch (error) {
+                qrDiv.innerHTML = 
+                    `<span class="error">❌ QR 碼生成失敗: ${error.message}</span>`;
+            }
+        };
+    </script>
+</body>
+</html>
