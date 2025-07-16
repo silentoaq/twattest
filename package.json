@@ -1,7 +1,15 @@
 {
-  "name": "twattest",
+  "name": "twattest-sdk",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
+  "main": "dist/sdk/index.js",
+  "types": "dist/sdk/index.d.ts",
+  "exports": {
+    ".": "./dist/sdk/index.js",
+    "./web": "./dist/sdk/web.js",
+    "./node": "./dist/sdk/node.js"
+  },
   "workspaces": [
     "src/web",
     "src/api"
@@ -9,9 +17,15 @@
   "scripts": {
     "dev:web": "npm run dev --workspace=src/web",
     "dev:api": "npm run dev --workspace=src/api",
-    "build": "npm run build --workspace=src/web"
+    "build": "npm run build --workspace=src/web",
+    "build:sdk": "tsc -p tsconfig.sdk.json",
+    "start:api": "npm run start --workspace=src/api"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4"
   },
   "devDependencies": {
+    "@types/qrcode": "^1.5.5",
     "typescript": "^5.2.2",
     "@types/node": "^20.11.17"
   }
