@@ -1,5 +1,5 @@
 import express from 'express';
-import { getAttestationStatus } from '../services/sas.ts';
+import { getAttestationStatus } from '../services/sas.js';
 
 const router = express.Router();
 
