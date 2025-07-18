@@ -1,3 +1,5 @@
+import type { TwfidoAttestation, TwlandAttestation, AttestationStatus, UserPermissions } from './web.js';
+
 export interface TwattestVerifierConfig {
   baseUrl?: string;
   apiSecret: string;
@@ -109,11 +111,11 @@ export class TwattestVerifier {
     }
   }
 
-  async getAttestationStatus(holderDid: string): Promise<any> {
+  async getAttestationStatus(holderDid: string): Promise<AttestationStatus> {
     return this.request(`/attestation/status/${holderDid}`);
   }
 
-  async checkUserPermissions(holderDid: string): Promise<any> {
+  async checkUserPermissions(holderDid: string): Promise<UserPermissions> {
     return this.request(`/sdk/permissions/${holderDid}`);
   }
 }

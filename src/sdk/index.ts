@@ -4,14 +4,22 @@ export { TwattestSDK } from './web.js';
 // Node SDK (後端使用)
 export { TwattestVerifier } from './node.js';
 
-// Types
+// Shared Types
+export type {
+  UserPermissions,
+  TwfidoAttestation,
+  TwlandAttestation,
+  AttestationStatus
+} from './web.js';
+
+// Web SDK Types
 export type {
   TwattestSDKConfig,
-  UserPermissions,
   DataRequestConfig, 
   DataRequestSession
 } from './web.js';
 
+// Node SDK Types
 export type {
   TwattestVerifierConfig,
   VerificationResult,

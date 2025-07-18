@@ -24,6 +24,34 @@ export interface DataRequestSession {
   expiresIn: number;
 }
 
+export interface TwfidoAttestation {
+  exists: boolean;
+  address: string;
+  data: {
+    merkleRoot: string;
+    credentialReference: string;
+  } | null;
+  expiry: number | null;
+}
+
+export interface TwlandAttestation {
+  exists: boolean;
+  attestations: Array<{
+    address: string;
+    data: {
+      merkleRoot: string;
+      credentialReference: string;
+    };
+    expiry: number;
+  }>;
+  count: number;
+}
+
+export interface AttestationStatus {
+  twfido?: TwfidoAttestation;
+  twland?: TwlandAttestation;
+}
+
 export class TwattestSDK {
   private baseUrl: string;
   private apiKey?: string;
@@ -66,6 +94,10 @@ export class TwattestSDK {
 
   async checkPermissions(userDid: string): Promise<UserPermissions> {
     return this.request(`/sdk/permissions/${userDid}`);
+  }
+
+  async getAttestationStatus(userDid: string): Promise<AttestationStatus> {
+    return this.request(`/attestation/status/${userDid}`);
   }
 
   async requestData(config: DataRequestConfig): Promise<DataRequestSession> {
