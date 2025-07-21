@@ -115,7 +115,7 @@ async function closeAttestation() {
       authority: authority,
       credential: credentialPda,
       attestation: attestationPda,
-      eventAuthority: address('8bdpHv6uU91DZ1oExc52WWRkx9MyQQiz6rFqyX98Vhx2'),  // 可以根據上面的數據調整
+      eventAuthority: authority.address,  // 可以根據上面的數據調整
       attestationProgram: address(process.env.SAS_PROGRAM_ID!)
     };
     
