@@ -3,14 +3,12 @@ import { VerificationRequest, VerificationResponse, SDJWTVerificationResult, SUP
 import { parseSDJWT, verifySDJWTSignature, calculateMerkleRoot } from './merkle.js';
 import { createAttestation } from './sas.js';
 
-// 儲存進行中的驗證請求
 const pendingVerifications = new Map<string, VerificationRequest & { 
   createdAt: number;
   nonce: string;
   state: string;
 }>();
 
-// 清理過期請求 (5分鐘過期)
 setInterval(() => {
   const now = Date.now();
   for (const [requestId, request] of pendingVerifications.entries()) {
@@ -26,7 +24,6 @@ export async function startVerification(holderDid: string): Promise<Verification
     const nonce = crypto.randomUUID();
     const state = crypto.randomUUID();
     
-    // 儲存驗證請求
     pendingVerifications.set(requestId, {
       holderDid,
       requestId,
@@ -35,7 +32,6 @@ export async function startVerification(holderDid: string): Promise<Verification
       state
     });
     
-    // 生成 OID4VP 請求 URI
     const vpRequestUri = `https://${process.env.DOMAIN}/api/verify/request/${requestId}`;
     
     return {
@@ -113,7 +109,7 @@ export async function handleCallback(requestId: string, vpData: any): Promise<an
     
     const verificationResult = await verifySDJWT(vpData.vp_token);
     if (!verificationResult.isValid) {
-      throw new Error('Invalid SD-JWT');
+      throw new Error('SD-JWT verification failed: Invalid or tampered disclosures');
     }
     
     if (verificationResult.holderDid !== request.holderDid) {
@@ -127,7 +123,8 @@ export async function handleCallback(requestId: string, vpData: any): Promise<an
     return {
       success: true,
       message: 'Verification completed and attestation created',
-      signature
+      signature,
+      disclosedClaims: verificationResult.disclosedClaims
     };
   } catch (error) {
     console.error('Callback handling failed:', error);
@@ -159,7 +156,8 @@ async function verifySDJWT(sdJwtToken: string): Promise<SDJWTVerificationResult>
       merkleRoot,
       credentialReference: parsed.credentialId,
       issuerDid: parsed.issuerDid,
-      expiry: parsed.expiry || 0
+      expiry: parsed.expiry || 0,
+      disclosedClaims: parsed.validatedDisclosures
     };
   } catch (error) {
     console.error('SD-JWT verification failed:', error);

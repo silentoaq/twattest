@@ -22,6 +22,7 @@ export interface SDJWTVerificationResult {
   credentialReference: string;
   issuerDid: string;
   expiry: number;
+  disclosedClaims?: Array<{salt: string, claim: string, value: any}>;
 }
 
 export const SUPPORTED_ISSUERS = {
