@@ -3,39 +3,36 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import verifyRoutes from './routes/verify.ts';
 import attestationRoutes from './routes/attestation.ts';
+import disclosureRoutes from './routes/disclosure.ts';
 
 dotenv.config({ path: '../../.env' });
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 
-// Routes
+app.use('/api', (req, res, next) => {
+  const apiKey = req.headers['x-api-key'];
+  
+  const publicPaths = ['/api/verify/', '/api/health', '/api/debug'];
+  if (publicPaths.some(path => req.path.startsWith(path))) {
+    return next();
+  }
+  
+  if (!apiKey) {
+    return res.status(401).json({ error: 'API key required' });
+  }
+  
+  const validApiKeys = process.env.VALID_API_KEYS?.split(',') || [];
+  if (!validApiKeys.includes(apiKey as string)) {
+    return res.status(401).json({ error: 'Invalid API key' });
+  }
+  
+  next();
+});
+
 app.use('/api/verify', verifyRoutes);
 app.use('/api/attestation', attestationRoutes);
-
-// Health check
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
-
-// Debug: 列出所有路由
-app.get('/debug/routes', (req, res) => {
-  res.json({
-    routes: [
-      'GET /health',
-      'GET /debug/routes',
-      'POST /api/verify/start',
-      'GET /api/verify/request/:requestId',
-      'POST /api/verify/presentation/:requestId',
-      'GET /api/attestation/status/:holderDid'
-    ]
-  });
-});
-
-app.listen(PORT, () => {
-  console.log(`Twattest API server running on port ${PORT}`);
-});
+app.use('/api/disclosure', disclosureRoutes);

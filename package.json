@@ -4,12 +4,15 @@
   "private": true,
   "workspaces": [
     "src/web",
-    "src/api"
+    "src/api",
+    "src/sdk"
   ],
   "scripts": {
     "dev:web": "npm run dev --workspace=src/web",
     "dev:api": "npm run dev --workspace=src/api",
-    "build": "npm run build --workspace=src/web"
+    "build": "npm run build --workspace=src/web",
+    "build:sdk": "npm run build --workspace=src/sdk",
+    "publish:sdk": "npm publish --workspace=src/sdk"
   },
   "devDependencies": {
     "typescript": "^5.2.2",
