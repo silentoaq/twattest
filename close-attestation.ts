@@ -2,6 +2,7 @@ import {
   deriveCredentialPda,
   deriveSchemaPda,
   deriveAttestationPda,
+  deriveEventAuthorityAddress,  // 加入這個
   getCloseAttestationInstruction,
   fetchAttestation,
   type CloseAttestationInput,
@@ -35,18 +36,15 @@ async function closeAttestation() {
     payer :
     await createKeyPairSignerFromPrivateKeyBytes(bs58.decode(authorityKey).slice(0, 32));
   
-  // 原始資料
   const holderAddress = "C1NjDZ5QjxMY7PFk2icTNUyemdxu78jMkg41NbzYXzyN";
   const credentialReference = "urn:uuid:daa0a267-be74-4174-a57b-222397c1c801";
   
-  // 計算 nonce
   const hash = crypto.createHash('sha256')
     .update(holderAddress + credentialReference)
     .digest();
   const nonce = bs58.encode(hash) as Address;
   
   try {
-    // 取得 PDAs
     const [credentialPda] = await deriveCredentialPda({
       authority: authority.address,
       name: process.env.CREDENTIAL_NAME!
@@ -62,60 +60,18 @@ async function closeAttestation() {
       nonce: nonce
     });
     
+    const eventAuthority = await deriveEventAuthorityAddress();
+    
     console.log('計算出的 Attestation PDA:', attestationPda);
-    
-    // 讀取並顯示 attestation 的完整數據
-    try {
-      const attestationData = await fetchAttestation(rpc, attestationPda);
-      
-      console.log('\n=== Attestation 資料 ===');
-      console.log('attestationData 物件:', attestationData);
-      
-      // 使用 console.dir 來顯示完整結構
-      console.log('\n=== 使用 console.dir 顯示完整結構 ===');
-      console.dir(attestationData, { depth: null });
-      
-      // 顯示頂層欄位
-      console.log('\n=== 頂層欄位名稱 ===');
-      console.log(Object.keys(attestationData));
-      
-      // 檢查並顯示 data 欄位
-      if ('data' in attestationData) {
-        console.log('\n=== data 欄位 ===');
-        console.log(attestationData.data);
-        
-        // 顯示 data 的所有欄位
-        console.log('\n=== data 的欄位名稱 ===');
-        console.log(Object.keys(attestationData.data));
-        
-        // 手動檢查每個欄位
-        for (const [key, value] of Object.entries(attestationData.data)) {
-          console.log(`${key}:`, typeof value === 'bigint' ? value.toString() : value);
-        }
-      }
-      
-      // 確認 attestation 確實存在於這個地址
-      console.log('\n=== 確認 ===');
-      console.log('Attestation 確實存在於地址:', attestationPda);
-      
-    } catch (fetchError) {
-      console.error('無法讀取 Attestation:', fetchError);
-      console.log('錯誤詳情:', fetchError);
-      return;
-    }
-    
-    // 嘗試不同的 eventAuthority 值
-    console.log('\n=== 嘗試關閉 Attestation ===');
-    
-    // 嘗試 1: 使用 authority.address
-    console.log('嘗試 eventAuthority = authority.address:', authority.address);
+    console.log('Event Authority:', eventAuthority);
     
     const closeInput: CloseAttestationInput = {
       payer: payer,
       authority: authority,
       credential: credentialPda,
       attestation: attestationPda,
-      eventAuthority: authority.address,  // 可以根據上面的數據調整
+      eventAuthority: eventAuthority,
+      systemProgram: address('11111111111111111111111111111111'),
       attestationProgram: address(process.env.SAS_PROGRAM_ID!)
     };
     
@@ -136,18 +92,22 @@ async function closeAttestation() {
     const signature = getSignatureFromTransaction(signedTransaction);
     console.log(`\n[成功] Twland Attestation 已關閉！`);
     console.log(`簽名: ${signature}`);
+    console.log(`Attestation PDA: ${attestationPda}`);
     
   } catch (error) {
     console.error('\n[錯誤] 關閉 Attestation 失敗:', error);
     
-    // 如果失敗，建議嘗試其他 eventAuthority 值
-    console.log('\n=== 建議嘗試的其他 eventAuthority 值 ===');
-    console.log('1. credentialPda:', (await deriveCredentialPda({
-      authority: authority.address,
-      name: process.env.CREDENTIAL_NAME!
-    }))[0]);
-    console.log('2. 程式 ID:', process.env.SAS_PROGRAM_ID);
-    console.log('3. 或查看上面印出的 attestation 數據中的相關欄位');
+    if (error instanceof Error && error.message.includes('custom program error')) {
+      console.log('\n診斷資訊：');
+      console.log('Authority:', authority.address);
+      console.log('Credential PDA:', (await deriveCredentialPda({
+        authority: authority.address,
+        name: process.env.CREDENTIAL_NAME!
+      }))[0]);
+      console.log('Nonce:', nonce);
+      console.log('Holder Address:', holderAddress);
+      console.log('Credential Reference:', credentialReference);
+    }
   }
 }
 
