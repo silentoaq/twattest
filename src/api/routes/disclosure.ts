@@ -3,7 +3,6 @@ import crypto from 'crypto';
 
 const router = express.Router();
 
-// 儲存揭露請求
 const disclosureRequests = new Map<string, {
   request: any
   status: 'pending' | 'completed' | 'expired'
@@ -12,18 +11,16 @@ const disclosureRequests = new Map<string, {
   completedAt?: number
 }>();
 
-// 清理過期請求
 setInterval(() => {
   const now = Date.now();
   for (const [id, data] of disclosureRequests.entries()) {
-    if (now - data.createdAt > 10 * 60 * 1000) { // 10 minutes
+    if (now - data.createdAt > 10 * 60 * 1000) {
       data.status = 'expired';
       setTimeout(() => disclosureRequests.delete(id), 60000);
     }
   }
 }, 60000);
 
-// 創建揭露請求
 router.post('/request', async (req, res) => {
   try {
     const { holderDid, credentialType, requiredFields, purpose, callbackUrl, credentialId } = req.body;
@@ -36,7 +33,6 @@ router.post('/request', async (req, res) => {
     const nonce = crypto.randomUUID();
     const state = crypto.randomUUID();
     
-    // 構建 OID4VP 請求
     const vpRequest = {
       presentation_definition: {
         id: `twattest-disclosure-${requestId}`,
@@ -97,7 +93,6 @@ router.post('/request', async (req, res) => {
       credential_id: credentialId
     };
     
-    // 儲存請求
     disclosureRequests.set(requestId, {
       request: {
         ...vpRequest,
@@ -114,7 +109,7 @@ router.post('/request', async (req, res) => {
     res.json({
       requestId,
       vpRequestUri,
-      expiresAt: Date.now() + 10 * 60 * 1000 // 10 minutes
+      expiresAt: Date.now() + 10 * 60 * 1000
     });
   } catch (error) {
     console.error('Failed to create disclosure request:', error);
@@ -124,7 +119,6 @@ router.post('/request', async (req, res) => {
   }
 });
 
-// 提供 VP 請求內容
 router.get('/vp-request/:requestId', async (req, res) => {
   try {
     const { requestId } = req.params;
@@ -142,7 +136,6 @@ router.get('/vp-request/:requestId', async (req, res) => {
   }
 });
 
-// 接收 VP 回應
 router.post('/callback/:requestId', async (req, res) => {
   try {
     const { requestId } = req.params;
@@ -161,10 +154,10 @@ router.post('/callback/:requestId', async (req, res) => {
     const disclosedData = await validateAndExtractDisclosure(
       vp_token,
       requestData.request.requiredFields,
-      requestData.request.credential_id
+      requestData.request.credential_id,
+      requestData.request.holderDid
     );
     
-    // 更新狀態
     requestData.status = 'completed';
     requestData.disclosedData = disclosedData;
     requestData.completedAt = Date.now();
@@ -190,7 +183,6 @@ router.post('/callback/:requestId', async (req, res) => {
   }
 });
 
-// 查詢揭露狀態
 router.get('/status/:requestId', async (req, res) => {
   try {
     const { requestId } = req.params;
@@ -215,11 +207,12 @@ router.get('/status/:requestId', async (req, res) => {
 async function validateAndExtractDisclosure(
   vpToken: string,
   requiredFields: string[],
-  expectedCredentialId?: string
+  expectedCredentialId?: string,
+  holderDid?: string
 ): Promise<any> {
   const { validateAndExtractDisclosure: validate } = await import('../services/sd-jwt-validator.js');
   
-  const result = await validate(vpToken, requiredFields, expectedCredentialId);
+  const result = await validate(vpToken, requiredFields, expectedCredentialId, holderDid);
   
   if (!result.isValid) {
     throw new Error(result.error || 'Validation failed');

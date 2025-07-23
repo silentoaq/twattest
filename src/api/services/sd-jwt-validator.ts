@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { ParsedSDJWT, parseSDJWT, verifySDJWTSignature, calculateMerkleRoot } from './merkle.js';
+import { ParsedSDJWT, parseSelectiveSDJWT, verifySDJWTSignature, calculateMerkleRoot } from './merkle.js';
 import { getAttestationStatus } from './sas.js';
 import { SUPPORTED_ISSUERS } from '../types.js';
 
@@ -16,10 +16,8 @@ export async function validateAndExtractDisclosure(
   holderDid?: string
 ): Promise<ValidatedDisclosure> {
   try {
-    // 1. 解析 SD-JWT
-    const parsed = parseSDJWT(vpToken);
+    const parsed = parseSelectiveSDJWT(vpToken);
     
-    // 2. 驗證持有者
     if (holderDid && parsed.holderDid !== holderDid) {
       return {
         isValid: false,
@@ -27,7 +25,6 @@ export async function validateAndExtractDisclosure(
       };
     }
     
-    //  驗證憑證 ID
     if (expectedCredentialId && parsed.credentialId !== expectedCredentialId) {
       return {
         isValid: false,
@@ -35,7 +32,6 @@ export async function validateAndExtractDisclosure(
       };
     }
     
-    //  驗證發行者
     if (!Object.values(SUPPORTED_ISSUERS).includes(parsed.issuerDid as any)) {
       return {
         isValid: false,
@@ -43,7 +39,6 @@ export async function validateAndExtractDisclosure(
       };
     }
     
-    //  驗證 JWT 簽名
     const isSignatureValid = await verifySDJWTSignature(parsed.jwt, parsed.issuerDid);
     if (!isSignatureValid) {
       return {
@@ -52,7 +47,6 @@ export async function validateAndExtractDisclosure(
       };
     }
     
-    //  驗證過期時間
     if (parsed.expiry && Date.now() / 1000 > parsed.expiry) {
       return {
         isValid: false,
@@ -60,7 +54,6 @@ export async function validateAndExtractDisclosure(
       };
     }
     
-    //  提取揭露的欄位
     const disclosedData: Record<string, any> = {};
     const foundFields: string[] = [];
     
@@ -71,7 +64,6 @@ export async function validateAndExtractDisclosure(
       }
     }
     
-    //  檢查是否所有必要欄位都已揭露
     const missingFields = requiredFields.filter(field => !foundFields.includes(field));
     if (missingFields.length > 0) {
       return {
@@ -80,10 +72,8 @@ export async function validateAndExtractDisclosure(
       };
     }
     
-    //  計算並驗證 Merkle root
     const calculatedRoot = calculateMerkleRoot(parsed.sdHashes);
     
-    //  與鏈上資料比對
     const attestationStatus = await getAttestationStatus(parsed.holderDid);
     
     let chainVerified = false;

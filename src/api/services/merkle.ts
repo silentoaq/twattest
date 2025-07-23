@@ -84,6 +84,70 @@ function validateDisclosures(disclosures: string[], sdHashes: string[]): Array<{
   return validatedClaims;
 }
 
+export function parseSelectiveSDJWT(sdJwtToken: string): ParsedSDJWT {
+  const parts = sdJwtToken.split('~');
+  const jwt = parts[0];
+  const disclosures = parts.slice(1).filter(d => d.length > 0);
+
+  const payload = JSON.parse(Buffer.from(jwt.split('.')[1], 'base64url').toString());
+
+  const holderDid = payload.sub;
+  const issuerDid = payload.iss;
+  const credentialId = payload.vc?.id || '';
+  const sdHashes = payload.vc?.credentialSubject?._sd || [];
+  const expiry = payload.exp;
+
+  const validatedDisclosures = validateSelectiveDisclosures(disclosures, sdHashes);
+
+  return {
+    jwt,
+    disclosures,
+    holderDid,
+    issuerDid,
+    credentialId,
+    sdHashes,
+    expiry,
+    validatedDisclosures
+  };
+}
+
+function validateSelectiveDisclosures(disclosures: string[], sdHashes: string[]): Array<{salt: string, claim: string, value: any}> {
+  const validatedClaims = [];
+  const disclosureHashMap = new Map<string, string>();
+  
+  for (const disclosure of disclosures) {
+    try {
+      const disclosureBytes = Buffer.from(disclosure, 'base64url');
+      const hash = crypto.createHash('sha256').update(disclosureBytes).digest();
+      const hashBase64Url = hash.toString('base64url');
+      const sdHash = `sha-256:${hashBase64Url}`;
+      
+      if (!sdHashes.includes(sdHash)) {
+        throw new Error(`Invalid disclosure: hash ${sdHash} not found in _sd array`);
+      }
+      
+      if (disclosureHashMap.has(sdHash)) {
+        throw new Error(`Duplicate disclosure for hash ${sdHash}`);
+      }
+      disclosureHashMap.set(sdHash, disclosure);
+      
+      const decoded = JSON.parse(Buffer.from(disclosure, 'base64url').toString());
+      if (!Array.isArray(decoded) || decoded.length !== 3) {
+        throw new Error('Invalid disclosure format');
+      }
+      
+      const [salt, claim, value] = decoded;
+      validatedClaims.push({ salt, claim, value });
+      
+    } catch (error) {
+      console.error('Error validating disclosure:', error);
+      throw error;
+    }
+  }
+  
+  return validatedClaims;
+}
+
 interface DIDDocument {
   id: string;
   verificationMethod: Array<{
