@@ -16,7 +16,17 @@ app.use(express.json());
 app.use('/api', (req, res, next) => {
   const apiKey = req.headers['x-api-key'];
   
-  const publicPaths = ['/api/verify/', '/api/health', '/api/debug'];
+  // req.path 在這裡不包含 /api 前綴
+  const publicPaths = [
+    '/verify/',
+    '/attestation/status/',
+    '/disclosure/vp-request/',
+    '/disclosure/callback/',
+    '/disclosure/status/',
+    '/health',
+    '/debug'
+  ];
+  
   if (publicPaths.some(path => req.path.startsWith(path))) {
     return next();
   }
@@ -36,3 +46,14 @@ app.use('/api', (req, res, next) => {
 app.use('/api/verify', verifyRoutes);
 app.use('/api/attestation', attestationRoutes);
 app.use('/api/disclosure', disclosureRoutes);
+
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+app.listen(PORT, () => {
+  console.log(`API server started successfully`);
+  console.log(`Running at: http://localhost:${PORT}`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`API Keys loaded: ${process.env.VALID_API_KEYS ? 'Yes' : 'No'}`);
+});
